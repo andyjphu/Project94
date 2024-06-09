@@ -8,21 +8,36 @@ colorama_init()
 
 
 
+market = {
+    "food": {
+        "price": 1.0,
+        "quantity": 0,
+    },
+    "tools": {
+        "price": 10.0,
+        "quantity": 0,
+    },
+    "foreign_food": {
+        "price": 0.5,
+        "quantity": 0,
+    },
+}
+
+
 population = {
     "farmers": {
-        "arable_land": 1000, # "max count of farmers"
         "count": 125,
-        "food": 125,
+        "food_surplus": 125, #Food production  = count * production_efficiency
         "production_efficiency": 1.1,
-        "knowledge": 0.0, 
+        "money": 0, 
         "tools": 0,
     
     }, 
     "artisans": {
         "count": 0,
         "production_efficiency": 0.0,
-        "knowledge": 0.0,
-        "tools": 0,
+        "money": 0,
+        "tools_surplus": 0,
     },
 }
 
@@ -37,6 +52,9 @@ while True:
     print(current_date.strftime("%Y-%m-%d"), "\n", "-" * 20)
     #print(f"{Style.BRIGHT}", end="")
     pprint.pprint(population)
+    print("-" * 20)
+    pprint.pprint(market)
+    print("-" * 20)
 
     # --------------------------------
 
@@ -44,66 +62,59 @@ while True:
     current_date += datetime.timedelta(days=1)
 
     # --------------------------------
-
-    # update artisan population
-    if (population["farmers"]["count"] < population["farmers"]["tools"]):
-        population["artisans"]["count"] -= 1
-        population["farmers"]["count"] += 1 
-        print("Demoted an artisan to farmer, Unsold tools")
-
-    # update artisan knowledge
-    population["artisans"]["knowledge"] += min(100, math.log(max(1, population["artisans"]["count"])) * 0.00001)
-
-    # update artisan production efficiency
-    population["artisans"]["production_efficiency"] = 2 + population["artisans"]["knowledge"]
-
-    # --------------------------------
-
-    # Update the tools
-    population["farmers"]["tools"] = int(population["artisans"]["count"] * population["artisans"]["production_efficiency"])
-
-    # Update production efficiency
-    population["farmers"]["production_efficiency"] = max(0, ((1500 - population["farmers"]["count"])/1000 ) + population["farmers"]["knowledge"]  + (population["farmers"]["tools"] / population["farmers"]["count"]) )
-
-    # Update the food
-    food_consumption = population["farmers"]["count"] + population["artisans"]["count"]
-
-    food_production = (
-        population["farmers"]["count"] * population["farmers"]["production_efficiency"] 
-    )
-
-    food_surplus = int(food_production - food_consumption +  (population["farmers"]["food"] * 0.75))
-
-    # Update population
-    if (food_surplus < 0):
-        population_loss = min(int(0.25 * population["farmers"]["count"]), -food_surplus)
-        print(f"Not enough food, lost {population_loss} farmers")
-        population["farmers"]["food"] = 0
-        population["farmers"]["count"] -= population_loss
-
-        # Demote an artisan to farmer
-        population["farmers"]["count"] += 1
-        population["artisans"]["count"] -= 1
-        print("Demoted an artisan to farmer")
+    
+    
+    
+    # update the farmers
+    population["farmers"]["food_surplus"] = int((population["farmers"]["count"] * population["farmers"]["production_efficiency"]) - population["farmers"]["count"])
+    
+    population["farmers"]["production_efficiency"] = random.randint(9,12)/10 + (population["farmers"]["tools"] / population["farmers"]["count"])
+    
+    
+    if (population["farmers"]["food_surplus"] < 0):
+        #buy to make up for the food deficit
+        
+        #initiate a starvation buy
+        if (market["food"]["quantity"] >= -population["farmers"]["food_surplus"]):
+             
+            print("Buy food : ", -population["farmers"]["food_surplus"], "@ $", market["food"]["price"]) 
+            if (population["farmers"]["money"] >= -population["farmers"]["food_surplus"] * market["food"]["price"]):
+                population["farmers"]["money"] -= -population["farmers"]["food_surplus"] * market["food"]["price"]
+                
+                population["farmers"]["food_surplus"] = 0
+            else:
+                population["farmers"]["food_surplus"] += population["farmers"]["money"] / market["food"]["price"]
+                population["farmers"]["money"] = 0
+            
+            
+            market["food"]["quantity"] -= -population["farmers"]["food_surplus"]   
+        else:
+            # market is completely sold out
+            population["farmers"]["money"] -= market["food"]["quantity"] * market["food"]["price"]
+            population["farmers"]["food_surplus"] += market["food"]["quantity"]
+            market["food"]["quantity"] = 0
+            
+        old_farmer_count = population["farmers"]["count"]    
+        population["farmers"]["count"] += int(population["farmers"]["food_surplus"])
+        print("Change in farmers: ", population["farmers"]["count"] - old_farmer_count)
+        population["farmers"]["food_surplus"] = 0
     else:
-        population["farmers"]["food"] = max(0, food_surplus)
+        # sell the food surplus and grow the population
+        population["farmers"]["money"] += int(population["farmers"]["food_surplus"] * market["food"]["price"])
+        print ("Sell food: ", population["farmers"]["food_surplus"], "@ $", market["food"]["price"])
+        
 
-        # Update the population, can't increase too fast
-        old_population = population["farmers"]["count"]
+        old_farmer_count = population["farmers"]["count"]
+        population["farmers"]["count"] =  population["farmers"]["count"] + int((population["farmers"]["money"] + population["farmers"]["food_surplus"]) /  population["farmers"]["count"])
+        
+        
+        print("Change in farmers: ", population["farmers"]["count"] - old_farmer_count)
+    
+    
+    # update the market
+    market["food"]["quantity"] += population["farmers"]["food_surplus"] 
+    market["food"]["price"] = random.randint(10,100)//10
 
-        population["farmers"]["count"] = int(population["farmers"]["count"] * min(max(1.0, (population["farmers"]["food"] / (population["farmers"]["count"] + population["artisans"]["count"]))  - 0.25), 1.05))
 
-        print(f"{population['farmers']['count'] - old_population} new farmers!")
-
-    population["farmers"]["knowledge"] += min(100, math.log(population["farmers"]["count"]) * 0.00001)
-
-    # --------------------------------
-
-    # population promotion for artisans
-
-    if ( population["farmers"]["count"] > population["farmers"]["tools"] and    (population["farmers"]["food"] /( population["farmers"]["count"] + population["artisans"]["count"])) > 1.05):
-        population["artisans"]["count"] += 1
-        population["farmers"]["count"] -= 1
-        print("1 new artisan!")
 
     time.sleep(0.25)
